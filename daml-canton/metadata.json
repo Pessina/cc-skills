@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "organization": "Signet",
+  "date": "February 2026",
+  "abstract": "Canton blockchain node setup and operations for Daml 3.x. Covers sandbox startup, party/user management, DAR deployment, JSON Ledger API v2, topology overview, and troubleshooting.",
+  "references": [
+    "https://docs.daml.com",
+    "https://docs.daml.com/canton/about.html"
+  ]
+}

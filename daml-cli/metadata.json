@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "organization": "Signet",
+  "date": "February 2026",
+  "abstract": "DPM (Digital Asset Package Manager) CLI reference for Daml SDK 3.x. Covers installation, project configuration, all commands, common workflows, and troubleshooting.",
+  "references": [
+    "https://docs.daml.com",
+    "https://docs.daml.com/tools/assistant.html"
+  ]
+}

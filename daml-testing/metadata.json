@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "organization": "Signet",
+  "date": "February 2026",
+  "abstract": "Daml Script testing patterns and best practices for Daml 3.x. Covers test structure, party allocation, contract lifecycle, multi-party submissions, assertions, and debugging.",
+  "references": [
+    "https://docs.daml.com",
+    "https://docs.daml.com/daml-script/index.html"
+  ]
+}

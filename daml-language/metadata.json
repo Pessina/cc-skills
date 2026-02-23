@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "organization": "Signet",
+  "date": "February 2026",
+  "abstract": "Daml 3.x language syntax and semantics reference. Covers modules, data types, templates, choices, the Update monad, DA.Crypto.Text, interfaces, contract keys, and standard library.",
+  "references": [
+    "https://docs.daml.com",
+    "https://docs.daml.com/daml/reference/index.html"
+  ]
+}

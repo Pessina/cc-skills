@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "organization": "Signet",
+  "date": "February 2026",
+  "abstract": "TypeScript integration for Canton JSON Ledger API v2. Covers OpenAPI client setup, Daml codegen-js bindings, type mappings, command submission, contract querying, WebSocket streaming, and testing with Vitest.",
+  "references": [
+    "https://docs.daml.com",
+    "https://openapi-ts.dev/openapi-fetch/"
+  ]
+}
