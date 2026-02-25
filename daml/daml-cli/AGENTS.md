@@ -133,14 +133,14 @@ codegen:
 - `daml-prim` - Primitive types (always required)
 - `daml-stdlib` - Standard library (always required)
 - `daml-script` - Daml Script for testing and automation
-- `daml-trigger` - Daml Triggers for reactive automation
+- `daml-trigger` - Daml Triggers for reactive automation (**deprecated** in Daml 3.x; not recommended for new projects)
 
 ### Common Build Options
 
 | Flag | Purpose |
 |---|---|
 | `-Wno-crypto-text-is-alpha` | Suppress warning when using `DA.Crypto.Text` (alpha module) |
-| `--ghc-option -Werror` | Treat warnings as errors |
+| `-Werror` | Treat warnings as errors |
 
 ---
 
@@ -214,20 +214,20 @@ Tests are Daml Script functions annotated as test entry points. They execute aga
 
 ### `dpm sandbox`
 
-Start a Canton sandbox with an integrated JSON API. This gives you a local ledger for development and testing.
+Start a Canton sandbox for local development and testing.
 
 ```bash
-# Start sandbox with defaults
+# Start sandbox with defaults (JSON API disabled, Ledger API on port 6865)
 dpm sandbox
-
-# Start with a specific JSON API port
-dpm sandbox --json-api-port 7575
 
 # Start and load a DAR at startup
 dpm sandbox --dar .daml/dist/my-project-0.1.0.dar
 
-# Start with a specific Canton port
-dpm sandbox --canton-port 6865
+# Start with a specific Ledger API port
+dpm sandbox --ledger-api-port 6865
+
+# Enable the JSON API on a specific port
+dpm sandbox --json-api-port 7575
 
 # Combine flags
 dpm sandbox --json-api-port 7575 --dar .daml/dist/my-project-0.1.0.dar
@@ -237,15 +237,17 @@ dpm sandbox --json-api-port 7575 --dar .daml/dist/my-project-0.1.0.dar
 
 | Flag | Default | Description |
 |---|---|---|
-| `--json-api-port <port>` | `7575` | Port for the JSON API HTTP endpoint |
-| `--canton-port <port>` | `6865` | Port for the Canton gRPC ledger API |
-| `--dar <path>` | (none) | Path to a DAR file to load at startup |
-| `--wall-clock-time` | (disabled) | Use wall clock time instead of static time |
+| `--ledger-api-port <port>` | `6865` | Port for the sandbox Ledger API |
+| `--admin-api-port <port>` | (auto) | Port for the sandbox Admin API |
+| `--json-api-port <port>` | (disabled) | Port for the sandbox JSON API; omit to disable |
+| `--dar <path>` | (none) | DAR file to upload at startup |
+| `--static-time` | (disabled) | Use static time mode |
+| `--dev` | (disabled) | Use dev protocol version |
 
 **Default endpoints when running:**
 
-- JSON API: `http://localhost:7575`
-- Canton gRPC API: `localhost:6865`
+- Canton gRPC Ledger API: `localhost:6865`
+- JSON API: disabled unless `--json-api-port` is specified (e.g., `--json-api-port 7575` serves at `http://localhost:7575`)
 
 The sandbox runs in the foreground. Use `Ctrl+C` to stop it.
 
@@ -288,19 +290,35 @@ The generated output includes:
 
 ---
 
-### `dpm daml <subcommand>`
+### `dpm new`
 
-Pass-through to the underlying `daml` command. Use this when you need access to lower-level Daml tooling that DPM does not wrap directly.
+Create a new Daml package from a template.
 
 ```bash
-# Example: run daml script directly
-dpm daml script --dar .daml/dist/my-project-0.1.0.dar --script-name Main:setup --ledger-host localhost --ledger-port 6865
-
-# Example: inspect a DAR
-dpm daml damlc inspect .daml/dist/my-project-0.1.0.dar
+dpm new my-project
 ```
 
-Any arguments after `daml` are forwarded directly to the `daml` CLI.
+---
+
+### `dpm script`
+
+Run a Daml Script binary against a ledger.
+
+```bash
+# Run a script against a live sandbox
+dpm script --dar .daml/dist/my-project-0.1.0.dar --script-name Main:setup --ledger-host localhost --ledger-port 6865
+```
+
+---
+
+### `dpm damlc`
+
+Access the Daml compiler and IDE backend directly.
+
+```bash
+# Inspect a DAR
+dpm damlc inspect .daml/dist/my-project-0.1.0.dar
+```
 
 ---
 
@@ -334,7 +352,17 @@ dpm version
 # Install the SDK
 dpm install 3.4.11
 
-# Create project directory
+# Create a new project from template
+dpm new my-project
+cd my-project
+
+# Build to verify setup
+dpm build
+```
+
+Alternatively, create a project manually:
+
+```bash
 mkdir my-project && cd my-project
 
 # Create daml.yaml
@@ -404,7 +432,7 @@ dpm test --test-pattern "testCreateAndTransfer"
 dpm sandbox --dar .daml/dist/my-project-0.1.0.dar
 
 # In another terminal, run a script against it
-dpm daml script \
+dpm script \
   --dar .daml/dist/my-project-0.1.0.dar \
   --script-name Main:setup \
   --ledger-host localhost \
@@ -448,7 +476,7 @@ lsof -i :6865
 kill <PID>
 
 # Or use a different port
-dpm sandbox --json-api-port 7576 --canton-port 6866
+dpm sandbox --json-api-port 7576 --ledger-api-port 6866
 ```
 
 ### DAR Build Fails

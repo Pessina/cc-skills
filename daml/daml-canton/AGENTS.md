@@ -37,6 +37,19 @@ The sandbox starts a full Canton node with:
 - JSON Ledger API v2 on the specified port (default 7575)
 - Admin API for topology management
 
+### Sandbox CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--ledger-api-port <value>` | Port for the Ledger API (gRPC) |
+| `--admin-api-port <value>` | Port for the Admin API |
+| `--json-api-port <value>` | Port for the JSON API (disabled by default; omit to not start it) |
+| `--dar <value>` | DAR file to upload at startup |
+| `--static-time` | Use static time instead of wall-clock time |
+| `--dev` | Run with dev protocol version |
+
+**NOTE:** There is no `--canton-port` or `--wall-clock-time` flag. Use `--ledger-api-port` for the Ledger API and `--static-time` for non-wall-clock time mode.
+
 ### What Canton Sandbox Provides
 
 - Single-participant Canton network (suitable for development)
@@ -150,33 +163,31 @@ Canton enforces strict upgrade rules:
 | `/v2/state/active-contracts` | POST | Query active contracts |
 | `/docs/openapi` | GET | OpenAPI 3.0.3 spec (YAML) |
 | `/docs/asyncapi` | GET | AsyncAPI spec (WebSocket) |
-| `/health` | GET | Health check |
+| `/livez` | GET | Liveness check |
 
 ### Command Submission Format
 
 ```json
 {
-  "commands": {
-    "commands": [
-      {
-        "CreateCommand": {
-          "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
-          "createArguments": {
-            "operator": "Operator::1220...",
-            "mpcPublicKey": "04abcdef..."
-          }
+  "commands": [
+    {
+      "CreateCommand": {
+        "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
+        "createArguments": {
+          "operator": "Operator::1220...",
+          "mpcPublicKey": "04abcdef..."
         }
       }
-    ],
-    "commandId": "unique-uuid",
-    "userId": "my-user",
-    "actAs": ["Party::1220..."],
-    "readAs": ["Party::1220..."]
-  }
+    }
+  ],
+  "commandId": "unique-uuid",
+  "userId": "my-user",
+  "actAs": ["Party::1220..."],
+  "readAs": ["Party::1220..."]
 }
 ```
 
-**NOTE:** Double nesting -- the outer `commands` object wraps the inner `commands` array plus metadata fields (`commandId`, `userId`, `actAs`, `readAs`).
+**NOTE:** Flat structure -- `commands` (array), `commandId`, `userId`, `actAs`, and `readAs` are all top-level fields in the request body.
 
 ### Template ID Format
 
@@ -192,23 +203,21 @@ The `#` prefix enables package-name resolution so you don't need the full packag
 
 ```json
 {
-  "commands": {
-    "commands": [
-      {
-        "CreateCommand": {
-          "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
-          "createArguments": {
-            "operator": "Operator::1220...",
-            "mpcPublicKey": "04abcdef..."
-          }
+  "commands": [
+    {
+      "CreateCommand": {
+        "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
+        "createArguments": {
+          "operator": "Operator::1220...",
+          "mpcPublicKey": "04abcdef..."
         }
       }
-    ],
-    "commandId": "create-orchestrator-001",
-    "userId": "admin-user",
-    "actAs": ["Operator::1220..."],
-    "readAs": ["Operator::1220..."]
-  }
+    }
+  ],
+  "commandId": "create-orchestrator-001",
+  "userId": "admin-user",
+  "actAs": ["Operator::1220..."],
+  "readAs": ["Operator::1220..."]
 }
 ```
 
@@ -216,27 +225,25 @@ The `#` prefix enables package-name resolution so you don't need the full packag
 
 ```json
 {
-  "commands": {
-    "commands": [
-      {
-        "ExerciseCommand": {
-          "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
-          "contractId": "00abc...",
-          "choice": "RequestDeposit",
-          "choiceArgument": {
-            "requester": "Depositor::1220...",
-            "erc20Address": "a0b86991...",
-            "amount": "100000000",
-            "evmParams": {}
-          }
+  "commands": [
+    {
+      "ExerciseCommand": {
+        "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
+        "contractId": "00abc...",
+        "choice": "RequestDeposit",
+        "choiceArgument": {
+          "requester": "Depositor::1220...",
+          "erc20Address": "a0b86991...",
+          "amount": "100000000",
+          "evmParams": {}
         }
       }
-    ],
-    "commandId": "deposit-request-001",
-    "userId": "admin-user",
-    "actAs": ["Operator::1220...", "Depositor::1220..."],
-    "readAs": ["Operator::1220...", "Depositor::1220..."]
-  }
+    }
+  ],
+  "commandId": "deposit-request-001",
+  "userId": "admin-user",
+  "actAs": ["Operator::1220...", "Depositor::1220..."],
+  "readAs": ["Operator::1220...", "Depositor::1220..."]
 }
 ```
 
@@ -249,19 +256,34 @@ curl -X POST http://localhost:7575/v2/state/active-contracts \
     "filter": {
       "filtersByParty": {
         "Operator::1220...": {
-          "cumulative": {
-            "templateFilters": [
-              {
-                "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
-                "includeCreatedEventBlob": false
+          "cumulative": [
+            {
+              "identifierFilter": {
+                "WildcardFilter": {
+                  "value": {
+                    "includeCreatedEventBlob": false
+                  }
+                }
               }
-            ]
-          }
+            }
+          ]
         }
       }
-    }
+    },
+    "verbose": false,
+    "activeAtOffset": 0
   }'
 ```
+
+**Required fields:**
+- `activeAtOffset` (number) -- required by the OpenAPI spec. Use `0` to query at the latest offset.
+- `verbose` (boolean) -- required by the OpenAPI spec.
+
+**Deprecation notice:** The `filter` field (TransactionFilter) is deprecated and will be removed in Canton 3.5.0. It is provided for backwards compatibility. Use `eventFormat` with `filtersByParty` / `filtersForAnyParty` as the replacement when available.
+
+**Structure notes:**
+- `cumulative` must be an **array** of filter objects (not a single object).
+- `filtersByParty` maps full party IDs (e.g., `"Operator::1220..."`) to filter objects.
 
 ### Full cURL Example: Submit and Wait
 
@@ -269,23 +291,21 @@ curl -X POST http://localhost:7575/v2/state/active-contracts \
 curl -X POST http://localhost:7575/v2/commands/submit-and-wait-for-transaction \
   -H "Content-Type: application/json" \
   -d '{
-    "commands": {
-      "commands": [
-        {
-          "CreateCommand": {
-            "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
-            "createArguments": {
-              "operator": "Operator::1220...",
-              "mpcPublicKey": "04abcdef..."
-            }
+    "commands": [
+      {
+        "CreateCommand": {
+          "templateId": "#canton-mpc-poc:Erc20Vault:VaultOrchestrator",
+          "createArguments": {
+            "operator": "Operator::1220...",
+            "mpcPublicKey": "04abcdef..."
           }
         }
-      ],
-      "commandId": "'"$(uuidgen)"'",
-      "userId": "admin-user",
-      "actAs": ["Operator::1220..."],
-      "readAs": ["Operator::1220..."]
-    }
+      }
+    ],
+    "commandId": "'"$(uuidgen)"'",
+    "userId": "admin-user",
+    "actAs": ["Operator::1220..."],
+    "readAs": ["Operator::1220..."]
   }'
 ```
 
@@ -323,11 +343,13 @@ Canton logs include:
 ## Health Check
 
 ```bash
-curl http://localhost:7575/health
-# Returns HTTP 200 if healthy
+curl http://localhost:7575/livez
+# Returns HTTP 200 if alive
 ```
 
 Use this to verify the sandbox is fully started before making API calls. The JSON API may take a few seconds to become available after the sandbox process starts.
+
+**NOTE:** The endpoint is `/livez`, not `/health`. The `/health` path does not exist in Canton 3.4.x.
 
 ---
 
@@ -400,7 +422,7 @@ This is expected behavior when re-running setup scripts.
 - The sandbox may still be starting up -- wait a few seconds and retry
 - Use the health endpoint to check readiness:
   ```bash
-  curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:7575/health
+  curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:7575/livez
   ```
 
 ### Template Not Found After DAR Upload
@@ -457,7 +479,7 @@ cd ts-tests && npm test
 | Build DAR | `dpm build` |
 | Run Daml tests | `dpm test` |
 | Start sandbox | `dpm sandbox --json-api-port 7575 --dar .daml/dist/my-project-0.1.0.dar` |
-| Health check | `curl http://localhost:7575/health` |
+| Health check | `curl http://localhost:7575/livez` |
 | Allocate party | `curl -X POST http://localhost:7575/v2/parties -H "Content-Type: application/json" -d '{"partyIdHint":"Alice","identityProviderId":""}'` |
 | Upload DAR | `curl -X POST "http://localhost:7575/v2/dars?vetAllPackages=true" -H "Content-Type: application/octet-stream" --data-binary @.daml/dist/my-project-0.1.0.dar` |
 | Get OpenAPI spec | `curl http://localhost:7575/docs/openapi` |
@@ -466,7 +488,7 @@ cd ts-tests && npm test
 
 - Always use full party IDs (with `::1220...` suffix) in API calls
 - Template IDs use `#` prefix for package-name resolution
-- Command submission has double nesting: outer `commands` object wraps inner `commands` array
+- Command submission uses a flat structure: `commands` array, `userId`, `actAs`, `readAs` are all top-level fields
 - `vetAllPackages=true` is required when uploading DARs to make templates available
 - The sandbox must be restarted when Daml templates change (in-memory storage)
 - JDK 17+ is required; set `JAVA_HOME` on macOS

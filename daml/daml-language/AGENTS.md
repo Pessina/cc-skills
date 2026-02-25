@@ -145,7 +145,7 @@ Complete mapping of Daml types to their descriptions and TypeScript equivalents 
 |-----------|-------------|---------------|
 | `Text` | UTF-8 string | `string` |
 | `Int` | 64-bit signed integer | `string` (avoids JS precision loss) |
-| `Decimal` | Fixed-point decimal (10 integer + 28 fractional digits) | `string` |
+| `Decimal` | Fixed-point decimal (28 integer + 10 fractional digits), alias for `Numeric 10` | `string` |
 | `Bool` | Boolean value | `boolean` |
 | `Party` | Ledger party identifier | `string` |
 | `ContractId a` | Reference to a contract of template `a` | `string` |
@@ -163,7 +163,7 @@ Complete mapping of Daml types to their descriptions and TypeScript equivalents 
 ### Numeric Precision Notes
 
 - `Int` is 64-bit signed: range is -2^63 to 2^63-1
-- `Decimal` has 38 digits total: 10 integer + 28 fractional
+- `Decimal` is `Numeric 10` with 38 digits total: 28 integer + 10 fractional
 - For token amounts, prefer `Int` (whole units or smallest denomination)
 - In JSON API, `Int` and `Decimal` are both serialized as strings to avoid JavaScript precision loss
 
@@ -239,20 +239,21 @@ template PositiveBalance
     ensure amount > 0
 ```
 
-### Agreement Text
+### Agreement Text (REMOVED)
 
-Human-readable description of the contract:
+The `agreement` keyword has been **fully removed** from Daml. Remove any `agreement` declarations from your code. The following is shown only for reference when reading legacy code:
 
 ```daml
-template Iou
-  with
-    issuer : Party
-    owner  : Party
-    amount : Decimal
-  where
-    signatory issuer
-    observer owner
-    agreement show issuer <> " owes " <> show owner <> " " <> show amount
+-- LEGACY CODE - DO NOT USE. The agreement keyword no longer exists in Daml 3.x.
+-- template Iou
+--   with
+--     issuer : Party
+--     owner  : Party
+--     amount : Decimal
+--   where
+--     signatory issuer
+--     observer owner
+--     agreement show issuer <> " owes " <> show owner <> " " <> show amount
 ```
 
 ---
@@ -329,6 +330,8 @@ controller operator, requester    -- Multiple parties (ALL must authorize)
 ```
 
 When multiple controllers are listed, **all** of them must submit/authorize the transaction.
+
+**Important:** When using the `choice` syntax (as opposed to the old `controller ... can` syntax), the controller is **NOT** automatically added as an observer. You must explicitly add any potential controller as an `observer` on the template; otherwise they will not be able to see the contract and therefore cannot exercise the choice.
 
 ### Choice Without Arguments
 
@@ -485,7 +488,7 @@ Provides cryptographic primitives for hex-encoded data. **Requires** the followi
 
 ```yaml
 build-options:
-  - --ghc-option=-Wno-crypto-text-is-alpha
+  - -Wno-crypto-text-is-alpha
 ```
 
 ### Imports
@@ -499,7 +502,7 @@ import DA.Crypto.Text
   , secp256k1WithEcdsaOnly
       -- SignatureHex -> BytesHex -> PublicKeyHex -> Bool
       -- NOTE: does NOT hash input (unlike secp256k1)
-  , packHexBytes    -- BytesHex -> Int -> Optional BytesHex
+  , packHexBytes    -- BytesHex -> Int -> Optional BytesHex  (hexInput first, then target byte count)
   , byteCount       -- BytesHex -> Int
   )
 ```
@@ -507,9 +510,9 @@ import DA.Crypto.Text
 ### Key Behaviors
 
 - **All hex values are bare hex** (no `0x` prefix) in Daml.
-- `keccak256` takes hex input and returns hex output (both without `0x`).
+- `keccak256` hashes the UTF-8 bytes of the input `Text` and returns the hash as hex (without `0x`). Note: it does NOT hex-decode the input first; it hashes the raw UTF-8 byte representation of the string.
 - `secp256k1WithEcdsaOnly` performs raw ECDSA verification. It does **NOT** hash the message internally (unlike `secp256k1` which hashes first). You must hash the message yourself before calling this function.
-- `packHexBytes targetBytes hexInput` left-pads with zeroes (or right-truncates) to the target byte width. Returns `None` if invalid hex.
+- `packHexBytes hexInput targetBytes` left-pads with zeroes (or right-truncates) to the target byte width. Returns `None` if invalid hex.
 - `byteCount` returns the number of bytes represented by the hex string (i.e., `length hex / 2`).
 
 ### Usage Example: EVM-style Signature Verification
@@ -519,7 +522,7 @@ verifyEvmSignature : SignatureHex -> BytesHex -> PublicKeyHex -> Bool
 verifyEvmSignature signature messageHash publicKey =
   let
     -- Ensure the message hash is exactly 32 bytes
-    paddedHash = fromSome (packHexBytes 32 messageHash)
+    paddedHash = fromSome (packHexBytes messageHash 32)
   in
     secp256k1WithEcdsaOnly signature paddedHash publicKey
 ```
@@ -530,9 +533,9 @@ verifyEvmSignature signature messageHash publicKey =
 buildTransferHash : BytesHex -> BytesHex -> BytesHex -> BytesHex
 buildTransferHash erc20Address recipient amount =
   let
-    paddedAddress   = fromSome (packHexBytes 32 erc20Address)
-    paddedRecipient = fromSome (packHexBytes 32 recipient)
-    paddedAmount    = fromSome (packHexBytes 32 amount)
+    paddedAddress   = fromSome (packHexBytes erc20Address 32)
+    paddedRecipient = fromSome (packHexBytes recipient 32)
+    paddedAmount    = fromSome (packHexBytes amount 32)
     encoded         = paddedAddress <> paddedRecipient <> paddedAmount
   in
     keccak256 encoded
@@ -768,7 +771,7 @@ let t = time (date 2024 Jan 1) 12 0 0
 
 -- Relative time arithmetic
 let tomorrow = addRelTime now (days 1)
-let anHourAgo = subTime now (hours 1)
+let elapsed = subTime now earlier  -- subTime : Time -> Time -> RelTime (difference between two instants)
 
 -- Relative time constructors
 days    : Int -> RelTime
@@ -1044,9 +1047,9 @@ source: daml
 dependencies:
   - daml-prim
   - daml-stdlib
-  - daml3-script
+  - daml-script
 build-options:
-  - --ghc-option=-Wno-crypto-text-is-alpha
+  - -Wno-crypto-text-is-alpha
 ```
 
 ### Key Fields

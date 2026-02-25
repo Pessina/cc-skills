@@ -35,8 +35,9 @@ dpm test
 dpm test --files daml/Test.daml
 ```
 
-`dpm test` discovers every top-level function whose name starts with `test` and whose
-type is `Script ()`. Each matching function is executed as an independent test case.
+`dpm test` discovers every top-level value whose type is `Script ()`. Each matching
+value is executed as an independent test case. Names do **not** need to start with
+`test`, though the `test` prefix is a recommended convention for readability.
 
 ---
 
@@ -48,7 +49,8 @@ module Test where
 import Daml.Script
 import MyModule  -- import your contract modules
 
--- Test functions must have type `Script ()` and start with `test`
+-- Test functions must have type `Script ()`
+-- By convention, names start with `test`, but this is not required for discovery
 testMyFeature : Script ()
 testMyFeature = do
   -- test body
@@ -59,7 +61,8 @@ Key rules:
 
 - The module name does **not** need to match the file name, but by convention it does.
 - Every test function **must** have the exact type `Script ()`.
-- The function name **must** begin with `test` (lowercase) to be auto-discovered.
+- By convention, prefix test names with `test` (lowercase) for readability, but `dpm test`
+  discovers all top-level `Script ()` values regardless of name.
 - Import `Daml.Script` in every test module.
 - Import the contract modules you need to test.
 
@@ -138,7 +141,7 @@ pendingCid <- submit (actAs operator <> actAs depositor) do
 ## Multi-Party Submissions
 
 ```daml
--- IMPORTANT: submitMulti is deprecated in Daml 3.x
+-- IMPORTANT: submitMulti is a deprecated legacy API kept only for backwards compatibility.
 -- Use the actAs combinator instead:
 result <- submit (actAs operator <> actAs depositor) do
   exerciseCmd cid MyChoice with arg1 = val1
@@ -207,11 +210,18 @@ assertMsg "different output must give different hash" (hash1 /= hash3)
 abort "Expected refund but got None"
 ```
 
-- `assertMsg : Text -> Bool -> Script ()` — the string is the failure message
-  shown when the boolean is `False`.
+- `assertMsg : CanAssert m => Text -> Bool -> m ()` — the string is the failure
+  message shown when the boolean is `False`. Works in `Script`, `Update`, and
+  other `CanAssert` contexts.
 - `abort : Text -> Script a` — unconditionally fails the test with the given
   message. Useful in unreachable branches.
-- There is no built-in `assertEqual`; use `assertMsg` with an equality check.
+- `DA.Assert` provides `assertEq` (and its infix alias `===`) for equality
+  checks with automatic error messages:
+  ```daml
+  import DA.Assert (assertEq, (===))
+  actual === expected               -- fails with a diff message
+  assertEq actual expected          -- same behavior, prefix form
+  ```
 
 ---
 
@@ -551,11 +561,11 @@ let pd = fromSome maybePending
 assertMsg "check" (pd.amount == 100)
 ```
 
-### 4. Hardcoding party strings
+### 4. Using non-existent `getParty`
 
 **Wrong:**
 ```daml
--- Party literals are fragile and may not match runtime identities
+-- getParty does not exist in Daml Script (it was a Scenario-era function)
 let operator = getParty "Operator"
 ```
 

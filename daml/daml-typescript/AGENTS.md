@@ -103,15 +103,16 @@ const VAULT_ORCHESTRATOR = VaultOrchestrator.templateId;
 | `Text` | `string` | `string` | |
 | `Int` | `string` | `string` | Avoids JS number precision loss! |
 | `Decimal` | `string` | `string` | |
+| `Numeric n` | `string` | `string` | Parameterized by scale; same encoding as Decimal |
 | `Bool` | `boolean` | `boolean` | |
 | `Party` | `string` | `string` | Full party ID with namespace |
 | `ContractId` | `string` | `string` | |
 | `Time` | `string` | `string` | ISO 8601 |
 | `Date` | `string` | `string` | |
 | `[a]` | `a[]` | `a[]` | |
-| `Optional a` | `a \| null` | conditional | |
+| `Optional a` | `a \| null` | conditional | Top-level: `null` / value. Nested `Optional (Optional a)`: `[]` for `Some None`, `[v]` for `Some (Some v)` |
 | `TextMap a` | `{ [key: string]: a }` | object | |
-| `BytesHex` | `string` | `string` | Bare hex in Daml, 0x-prefixed in TS/viem |
+| `BytesHex` | `string` | `string` | Project-specific type (not a Daml primitive). Bare hex in Daml, 0x-prefixed in TS/viem |
 
 **CRITICAL**: `Int` maps to `string` in TypeScript. Pass amounts as `"100000000"` not `100000000`. JavaScript numbers lose precision beyond `Number.MAX_SAFE_INTEGER` (2^53 - 1), which is why the Daml codegen maps `Int` to `string`.
 
@@ -235,13 +236,11 @@ async function submitAndWait(
     "/v2/commands/submit-and-wait-for-transaction",
     {
       body: {
-        commands: {
-          commands,
-          commandId: crypto.randomUUID(),
-          userId,
-          actAs,
-          readAs: actAs,
-        },
+        commands,
+        commandId: crypto.randomUUID(),
+        userId,
+        actAs,
+        readAs: actAs,
       } as components["schemas"]["JsSubmitAndWaitForTransactionRequest"],
     },
   );
@@ -250,7 +249,7 @@ async function submitAndWait(
 }
 ```
 
-**NOTE the double nesting**: The outer `commands` object wraps the inner `commands` array along with metadata (`commandId`, `userId`, `actAs`, `readAs`). This is a common source of confusion.
+**NOTE**: The `commands` array sits at the same level as `commandId`, `userId`, `actAs`, and `readAs` — all are direct properties of `body`. There is no wrapper object around them.
 
 ### Create Contract
 
@@ -308,11 +307,16 @@ const { data: contracts } = await client.POST("/v2/state/active-contracts", {
         },
       },
     },
+    activeAtOffset: 0,
   },
 });
 ```
 
-The filter structure uses `filtersByParty` keyed by the party's full ID string. Each party's filter contains a `cumulative` array of identifier filters. Use `TemplateFilter` to match a specific template, or `WildcardFilter` to match all templates visible to that party.
+**Key fields**:
+- `filter` uses `filtersByParty` keyed by the party's full ID string. Each party's filter contains a `cumulative` array (must be an array) of identifier filters. Use `TemplateFilter` to match a specific template, or `WildcardFilter` to match all templates visible to that party.
+- `activeAtOffset` is required and specifies the ledger offset at which to query. Use `0` for the latest state.
+
+> **Deprecation note**: The `filter` (TransactionFilter) field is deprecated as of Canton 3.5.0. Check the Canton release notes for its replacement when upgrading.
 
 ---
 
@@ -380,7 +384,6 @@ ws.onopen = () => {
   ws.send(
     JSON.stringify({
       beginExclusive: 0,
-      verbose: true,
       updateFormat: {
         includeTransactions: {
           eventFormat: {
@@ -431,9 +434,10 @@ ws.onclose = () => {
 
 The WebSocket connection at `/v2/updates` streams ledger updates in real time. The subscription message specifies:
 - `beginExclusive`: offset to start streaming from (0 for beginning)
-- `verbose`: include full template IDs in events
 - `updateFormat.includeTransactions`: which transactions to include, with party-based event filtering
 - `transactionShape`: `TRANSACTION_SHAPE_ACS_DELTA` returns only created/archived events (no exercise nodes)
+
+**NOTE**: `verbose` and `updateFormat` are mutually exclusive (Canton 3.4+). The `verbose` flag is a legacy option kept for backwards compatibility; if `updateFormat` is set, `verbose` must be unset. Prefer `updateFormat` for new code.
 
 ---
 
@@ -449,6 +453,7 @@ The WebSocket connection at `/v2/updates` streams ledger updates in real time. T
 | `/v2/commands/async/submit` | POST | Submit commands asynchronously |
 | `/v2/state/active-contracts` | POST | Query active contract set |
 | `/v2/updates` | WebSocket | Stream ledger updates |
+| `/livez` | GET | Health/liveness check (NOT `/health`) |
 | `/docs/openapi` | GET | OpenAPI spec (YAML) |
 | `/docs/asyncapi` | GET | AsyncAPI spec (WebSocket) |
 
@@ -593,9 +598,9 @@ Some fields marked as required in the Canton OpenAPI spec are actually optional 
 
 Use random IDs for parties and users in tests to avoid conflicts across runs. Without unique IDs, re-running tests against a persistent sandbox causes party/user collision errors.
 
-### 8. Double-Nested Commands Object
+### 8. Flat Commands Body
 
-The submit endpoint expects `{ commands: { commands: [...], userId, actAs, ... } }`. Forgetting the outer wrapper is a common mistake.
+The submit endpoint expects a flat body: `{ commands: [...], commandId, userId, actAs, readAs }`. All fields are direct properties of `body` — there is no wrapper object around the `commands` array.
 
 ### 9. Party ID Format
 
